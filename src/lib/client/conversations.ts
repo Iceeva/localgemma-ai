@@ -25,6 +25,8 @@ export interface Conversation {
 
 const DB_NAME = "localgemma-ai";
 const STORE = "conversations";
+/** Clé sessionStorage : prompt suggéré à pré-remplir dans une nouvelle conversation. */
+export const INITIAL_PROMPT_KEY = "lg-initial-prompt";
 export const CONVERSATIONS_CHANGED = "lg-conversations-changed";
 
 function open(): Promise<IDBDatabase> {
