@@ -12,6 +12,7 @@ export function defaultConfig(): AppConfig {
     folders: [],
     models: [],
     selectedModelId: null,
+    ignoredPaths: [],
     server: { ...DEFAULT_SERVER_SETTINGS },
     generation: { ...DEFAULT_GENERATION },
   };
@@ -29,6 +30,8 @@ export function sanitizeConfig(raw: unknown): AppConfig {
   base.enginePath = str(raw.enginePath) ?? null;
   base.engineVersion = str(raw.engineVersion) ?? null;
   base.selectedModelId = str(raw.selectedModelId) ?? null;
+
+  if (Array.isArray(raw.ignoredPaths)) base.ignoredPaths = raw.ignoredPaths.filter((x): x is string => typeof x === "string");
 
   if (Array.isArray(raw.folders)) {
     for (const f of raw.folders) {

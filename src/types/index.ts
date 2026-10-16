@@ -54,6 +54,8 @@ export interface AppConfig {
   folders: FolderEntry[];
   models: ModelEntry[];
   selectedModelId: string | null;
+  /** Chemins (normalisés) retirés de la bibliothèque : ignorés lors des actualisations de dossiers. */
+  ignoredPaths: string[];
   server: ServerSettings;
   generation: GenerationParams;
 }
