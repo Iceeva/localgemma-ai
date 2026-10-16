@@ -64,7 +64,7 @@ export function validateServerSettings(input: Partial<Record<keyof ServerSetting
     ["contextSize", 256, 131072, "Le contexte doit être un entier entre 256 et 131072."],
     ["threads", 1, 128, "Le nombre de threads doit être un entier entre 1 et 128."],
     ["parallel", 1, 16, "Le nombre de slots parallèles doit être un entier entre 1 et 16."],
-    ["startupTimeoutSec", 10, 1800, "Le délai de démarrage doit être entre 10 et 1800 secondes."],
+    ["startupTimeoutSec", 1, 1800, "Le délai de démarrage doit être entre 1 et 1800 secondes."],
   ];
   for (const [key, min, max, msg] of specs) {
     if (input[key] === undefined) continue;

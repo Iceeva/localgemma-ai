@@ -275,12 +275,13 @@ export class ProcessManager {
     const base = baseUrl(settings);
     const deadline = Date.now() + settings.startupTimeoutSec * 1000;
     while (true) {
-      if (this.exit) {
+      const exitInfo = this.getExit();
+      if (exitInfo) {
         const err = this.cancelRequested
           ? new AppError("SERVER_NOT_RUNNING", "Le démarrage a été annulé.", "Relancez le modèle quand vous le souhaitez.", 409)
           : spawnError
             ? new AppError("ENGINE_START_FAILED", "Impossible de lancer llama-server.exe : " + (spawnError as Error).message, "Vérifiez le fichier, les droits d'accès et l'antivirus.", 500)
-            : classifyFailure(this.recentLogText(), this.exit.code);
+            : classifyFailure(this.recentLogText(), exitInfo.code);
         this.cleanupProcess();
         this.fail(modelId, err);
         throw err;
@@ -313,6 +314,11 @@ export class ProcessManager {
     await touchModelUsed(this.store, modelId);
     this.log("app", "Serveur prêt.");
     return this.getStatus();
+  }
+
+  /** Lecture indirecte : évite que TypeScript fige l'état à null pendant la boucle d'attente. */
+  private getExit(): { code: number | null } | null {
+    return this.exit;
   }
 
   private onExit(child: ChildProcess, code: number | null): void {

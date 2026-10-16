@@ -1,0 +1,91 @@
+#!/usr/bin/env node
+/* Faux llama-server pour les tests : ne charge aucun modèle, répond comme l'API de llama.cpp. */
+const http = require("http");
+const path = require("path");
+
+const args = process.argv.slice(2);
+if (args.includes("--version")) {
+  process.stderr.write("version: 9999 (fake)\nbuilt with test-suite\n");
+  process.exit(0);
+}
+const get = (f, d) => {
+  const i = args.indexOf(f);
+  return i >= 0 ? args[i + 1] : d;
+};
+const model = get("--model", "");
+const port = Number(get("--port", "8080"));
+const host = get("--host", "127.0.0.1");
+const base = path.basename(model);
+console.error(`fake llama-server: model=${base} ctx=${get("--ctx-size")} threads=${get("--threads")} parallel=${get("--parallel")}`);
+
+if (base.includes("crash")) {
+  console.error("llama_model_load: error loading model: failed to load model");
+  process.exit(1);
+}
+if (base.includes("oom")) {
+  console.error("ggml_backend_cpu_buffer_type_alloc_buffer: failed to allocate buffer of size 99999999999");
+  process.exit(1);
+}
+
+let ready = false;
+setTimeout(() => {
+  ready = true;
+  console.error("server is listening");
+}, base.includes("slowload") ? 1500 : 100);
+let aborted = 0;
+
+const server = http.createServer((req, res) => {
+  if (req.url === "/health") {
+    res.writeHead(ready ? 200 : 503, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(ready ? { status: "ok" } : { error: { message: "Loading model" } }));
+    return;
+  }
+  if (req.url === "/__aborted") {
+    res.end(String(aborted));
+    return;
+  }
+  if (req.url === "/v1/chat/completions" && req.method === "POST") {
+    let raw = "";
+    req.on("data", (d) => (raw += d));
+    req.on("end", () => {
+      const body = JSON.parse(raw);
+      const last = [...body.messages].reverse().find((m) => m.role === "user");
+      const text = `Modèle ${base} : ${last ? last.content : ""}`;
+      if (!body.stream) {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ choices: [{ message: { role: "assistant", content: text }, finish_reason: "stop" }] }));
+        return;
+      }
+      res.writeHead(200, { "Content-Type": "text/event-stream" });
+      const slow = last && last.content.includes("SLOW");
+      const words = slow ? Array.from({ length: 400 }, (_, i) => `mot${i} `) : text.split(/(?<= )/);
+      let i = 0;
+      let closed = false;
+      res.on("close", () => {
+        if (!closed) aborted++;
+        closed = true;
+      });
+      const timer = setInterval(() => {
+        if (closed) return clearInterval(timer);
+        if (i < words.length) {
+          res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: words[i++] } }] })}\n\n`);
+        } else {
+          res.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: "stop" }], timings: { predicted_per_second: 3.5 } })}\n\n`);
+          res.write("data: [DONE]\n\n");
+          closed = true;
+          clearInterval(timer);
+          res.end();
+        }
+      }, slow ? 40 : 10);
+    });
+    return;
+  }
+  res.writeHead(404);
+  res.end();
+});
+server.on("error", (e) => {
+  console.error(e.code === "EADDRINUSE" ? "couldn't bind HTTP server socket: address already in use" : String(e));
+  process.exit(1);
+});
+server.listen(port, host);
+process.on("SIGTERM", () => process.exit(0));
