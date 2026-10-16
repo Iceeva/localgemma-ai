@@ -26,7 +26,7 @@ export function issueTicket(kind: SelectionKind, selectedPath: string): string {
   return id;
 }
 
-export function allowPathInput(env: NodeJS.ProcessEnv = process.env): boolean {
+export function allowPathInput(env: Record<string, string | undefined> = process.env): boolean {
   return env.LOCALGEMMA_ALLOW_PATH_INPUT === "1";
 }
 
@@ -46,7 +46,7 @@ export function consumeTicket(ticket: unknown, kind: SelectionKind): string {
 }
 
 /** Résout le chemin d'une requête : ticket du sélecteur, ou chemin direct si le mode avancé est activé. */
-export function resolveSelection(body: { ticket?: unknown; path?: unknown }, kind: SelectionKind, env: NodeJS.ProcessEnv = process.env): string {
+export function resolveSelection(body: { ticket?: unknown; path?: unknown }, kind: SelectionKind, env: Record<string, string | undefined> = process.env): string {
   if (body.ticket !== undefined) return consumeTicket(body.ticket, kind);
   if (allowPathInput(env) && body.path !== undefined) return assertSafeAbsolutePath(body.path);
   throw new AppError(

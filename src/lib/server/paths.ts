@@ -3,7 +3,7 @@ import path from "node:path";
 
 /** Dossier de données persistantes (config.json, server.pid.json). */
 export function resolveDataDir(
-  env: NodeJS.ProcessEnv = process.env,
+  env: Record<string, string | undefined> = process.env,
   platform: NodeJS.Platform = process.platform,
   home: string = os.homedir(),
 ): string {
