@@ -72,6 +72,8 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 Pour arrêter : `Ctrl+C` dans la fenêtre, ou `.\scripts\stop.ps1`. Le modèle actif est arrêté avec l'application.
 
+**Sans taper de commande** : double-cliquez sur `Installer-LocalGemma-AI.bat` (une fois), puis sur `Lancer-LocalGemma-AI.bat` (chaque jour). Ils appellent les scripts PowerShell en contournant la restriction d'exécution pour cette session uniquement. Faites un clic droit → *Envoyer vers → Bureau (créer un raccourci)* sur le second pour l'avoir sur le bureau.
+
 ### Première configuration (une seule fois)
 
 1. **Configuration locale → Moteur d'IA local → Parcourir mon ordinateur** : choisissez `llama-server.exe`, puis **Enregistrer**. « Tester le moteur » affiche la version.
