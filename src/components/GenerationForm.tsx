@@ -1,7 +1,8 @@
 "use client";
 
 import type { GenerationParams } from "@/types";
-import { Field, inputClass } from "./ui";
+import { COMPACT_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT } from "@/lib/defaults";
+import { Button, Field, inputClass } from "./ui";
 
 export function GenerationForm({ value, onChange }: { value: GenerationParams; onChange: (v: GenerationParams) => void }) {
   const set = <K extends keyof GenerationParams>(k: K, v: GenerationParams[K]) => onChange({ ...value, [k]: v });
@@ -25,8 +26,13 @@ export function GenerationForm({ value, onChange }: { value: GenerationParams; o
       </label>
       <div className="sm:col-span-2">
         <Field label="Prompt système">
-          <textarea rows={3} className={inputClass} value={value.systemPrompt} onChange={(e) => set("systemPrompt", e.target.value)} />
+          <textarea rows={6} className={inputClass} value={value.systemPrompt} onChange={(e) => set("systemPrompt", e.target.value)} />
         </Field>
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+          <Button onClick={() => set("systemPrompt", DEFAULT_SYSTEM_PROMPT)}>Prompt recommandé</Button>
+          <Button onClick={() => set("systemPrompt", COMPACT_SYSTEM_PROMPT)}>Prompt compact</Button>
+          <span>≈ {Math.round(value.systemPrompt.length / 3.5)} tokens du contexte sont consommés par ce prompt.</span>
+        </div>
       </div>
     </div>
   );

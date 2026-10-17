@@ -99,6 +99,7 @@ Valeurs par défaut : contexte **2048**, **2 threads**, **1 slot parallèle**, 5
 - **Slots parallèles (`--parallel 1`)** : les versions récentes de `llama-server` partagent le contexte entre plusieurs slots ; à 1, tout le contexte sert à votre conversation.
 - **Mémoire** : elle dépend de la taille du modèle, de la taille du contexte, des caches et des autres applications ouvertes. Aucun réglage ne garantit qu'un modèle donné tiendra. Sur 12 Go de RAM, privilégiez des modèles petits et fortement quantifiés (Q4) ; fermez le navigateur et les autres applications lourdes.
 - Les paramètres du serveur s'appliquent **au prochain démarrage** du modèle.
+- **Prompt système** : le prompt recommandé (≈ 500 tokens) est suivi du prompt « compact » (≈ 150 tokens) en un clic dans *Paramètres*. Avec un contexte de 2048, préférez le compact : chaque token du prompt est retiré de la place disponible pour la conversation et ralentit le premier calcul sur CPU. Les valeurs déjà enregistrées dans `config.json` ne sont pas modifiées automatiquement.
 
 Paramètres réellement transmis à `llama-server` : `--model`, `--host`, `--port`, `--ctx-size`, `--threads`, `--parallel`. Aucun autre drapeau n'est envoyé, pour rester compatible avec un maximum de versions.
 

@@ -3,6 +3,7 @@ import { constants as fsc } from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import type { FileCheck, GenerationParams, ServerSettings } from "@/types";
+import { DEFAULT_SYSTEM_PROMPT } from "@/lib/defaults";
 import { AppError } from "./errors";
 
 export const DEFAULT_SERVER_SETTINGS: ServerSettings = {
@@ -21,7 +22,7 @@ export const DEFAULT_GENERATION: GenerationParams = {
   topK: 40,
   maxTokens: 512,
   stream: true,
-  systemPrompt: "Tu es un assistant utile, clair et concis. Réponds dans la langue de l'utilisateur.",
+  systemPrompt: DEFAULT_SYSTEM_PROMPT,
 };
 
 const LOOPBACK_HOSTS = ["127.0.0.1", "localhost", "::1"];
