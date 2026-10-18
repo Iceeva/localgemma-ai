@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import { constants as fsc } from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import type { FileCheck, GenerationParams, ServerSettings } from "@/types";
+import type { FileCheck, GenerationParams, SearchSettings, ServerSettings } from "@/types";
 import { DEFAULT_SYSTEM_PROMPT } from "@/lib/defaults";
 import { AppError } from "./errors";
 
@@ -24,6 +24,43 @@ export const DEFAULT_GENERATION: GenerationParams = {
   stream: true,
   systemPrompt: DEFAULT_SYSTEM_PROMPT,
 };
+
+export const DEFAULT_SEARCH_SETTINGS: SearchSettings = { url: "", maxResults: 5, timeoutSec: 10, language: "fr" };
+
+export function validateSearchSettings(input: Partial<Record<keyof SearchSettings, unknown>>, current: SearchSettings): SearchSettings {
+  const out = { ...current };
+  const errors: Record<string, string> = {};
+  if (input.url !== undefined) {
+    const raw = typeof input.url === "string" ? input.url.trim() : null;
+    if (raw === "") out.url = "";
+    else if (raw === null) errors.url = "L'adresse doit être du texte.";
+    else {
+      try {
+        const u = new URL(raw);
+        if (!["http:", "https:"].includes(u.protocol) || u.username || u.password || u.search || u.hash) throw new Error("x");
+        out.url = (u.origin + u.pathname).replace(/\/+$/, "");
+      } catch {
+        errors.url = "L'adresse doit être de la forme http://127.0.0.1:8888 (http ou https, sans identifiants).";
+      }
+    }
+  }
+  if (input.maxResults !== undefined) {
+    const n = intIn(input.maxResults, 1, 10);
+    if (n === null) errors.maxResults = "Le nombre de résultats doit être entre 1 et 10.";
+    else out.maxResults = n;
+  }
+  if (input.timeoutSec !== undefined) {
+    const n = intIn(input.timeoutSec, 1, 60);
+    if (n === null) errors.timeoutSec = "Le délai doit être entre 1 et 60 secondes.";
+    else out.timeoutSec = n;
+  }
+  if (input.language !== undefined) {
+    if (typeof input.language === "string" && /^(all|[a-z]{2,3}(-[A-Za-z]{2,4})?)$/.test(input.language.trim())) out.language = input.language.trim();
+    else errors.language = "Langue invalide (ex. fr, en, fr-FR, all).";
+  }
+  if (Object.keys(errors).length) throw fieldError(errors);
+  return out;
+}
 
 const LOOPBACK_HOSTS = ["127.0.0.1", "localhost", "::1"];
 

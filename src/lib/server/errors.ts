@@ -28,6 +28,14 @@ export type ErrorCode =
   | "DIALOG_FAILED"
   | "TICKET_INVALID"
   | "CONFIG_CORRUPT"
+  | "SEARCH_NOT_CONFIGURED"
+  | "SEARCH_UNREACHABLE"
+  | "SEARCH_FORMAT_DISABLED"
+  | "SEARCH_FAILED"
+  | "UNSUPPORTED_FILE"
+  | "FILE_TOO_LARGE"
+  | "EXTRACT_FAILED"
+  | "EXPORT_FAILED"
   | "INTERNAL";
 
 export class AppError extends Error {

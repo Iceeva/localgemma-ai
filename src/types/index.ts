@@ -47,6 +47,31 @@ export interface ModelEntry {
   sizeLabel?: string;
 }
 
+export interface SearchSettings {
+  /** Adresse de l'instance SearXNG. Vide = recherche web non configurée (100 % hors ligne). */
+  url: string;
+  maxResults: number;
+  timeoutSec: number;
+  language: string;
+}
+
+export interface MemoryNote {
+  id: string;
+  text: string;
+  createdAt: string;
+}
+
+export interface MemorySettings {
+  enabled: boolean;
+  notes: MemoryNote[];
+}
+
+export interface SearchResult {
+  title: string;
+  url: string;
+  content: string;
+}
+
 export interface AppConfig {
   version: 1;
   enginePath: string | null;
@@ -58,6 +83,8 @@ export interface AppConfig {
   ignoredPaths: string[];
   server: ServerSettings;
   generation: GenerationParams;
+  search: SearchSettings;
+  memory: MemorySettings;
 }
 
 export interface ErrorPayload {

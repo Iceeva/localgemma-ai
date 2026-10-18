@@ -2,7 +2,7 @@ import { handler, ok, readJson } from "@/lib/server/http";
 import { getConfigStore } from "@/lib/server/config-store";
 import { resolveDataDir } from "@/lib/server/paths";
 import { allowPathInput } from "@/lib/server/selection";
-import { validateGenerationParams, validateServerSettings } from "@/lib/server/validators";
+import { validateGenerationParams, validateSearchSettings, validateServerSettings } from "@/lib/server/validators";
 import { getManager } from "@/lib/server/process-manager";
 import { AppError } from "@/lib/server/errors";
 
@@ -35,9 +35,11 @@ export const PUT = handler(async (req: Request) => {
   const current = await store.read();
   const server = body.server !== undefined ? validateServerSettings(body.server as never, current.server) : current.server;
   const generation = body.generation !== undefined ? validateGenerationParams(body.generation as never, current.generation) : current.generation;
+  const search = body.search !== undefined ? validateSearchSettings(body.search as never, current.search) : current.search;
   const next = await store.update((c) => {
     c.server = server;
     c.generation = generation;
+    c.search = search;
   });
   return ok({ config: next, restartRequired: touchesServer && status.state === "running" });
 });

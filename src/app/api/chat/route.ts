@@ -3,6 +3,7 @@ import { getConfigStore } from "@/lib/server/config-store";
 import { AppError } from "@/lib/server/errors";
 import { baseUrl, finishGeneration, openChat, registerGeneration, relayStream, validateChatMessages } from "@/lib/server/llama-client";
 import { getManager } from "@/lib/server/process-manager";
+import { composeSystemPrompt } from "@/lib/server/prompt";
 import { validateGenerationParams } from "@/lib/server/validators";
 import { readJson } from "@/lib/server/http";
 
@@ -16,7 +17,9 @@ export const POST = handler(async (req: Request) => {
   const messages = validateChatMessages(body.messages);
   const store = getConfigStore();
   const cfg = await store.read();
-  const params = validateGenerationParams((body.params ?? {}) as never, cfg.generation);
+  const validated = validateGenerationParams((body.params ?? {}) as never, cfg.generation);
+  // Prompt final = prompt de base + mode choisi + mémoire locale (si activée).
+  const params = { ...validated, systemPrompt: composeSystemPrompt({ base: validated.systemPrompt, modeId: typeof body.mode === "string" ? body.mode : null, memory: cfg.memory }) };
   const generationId = typeof body.generationId === "string" && body.generationId.length <= 64 ? body.generationId : crypto.randomUUID();
 
   const manager = getManager();

@@ -46,6 +46,9 @@ export function validateChatMessages(input: unknown): ChatMessage[] {
   if (!Array.isArray(input) || input.length === 0 || input.length > 500) {
     throw new AppError("VALIDATION", "La conversation envoyée est vide ou trop longue.", "Envoyez au moins un message.");
   }
+  if (input.reduce((n, m) => n + (typeof (m as { content?: unknown })?.content === "string" ? (m as { content: string }).content.length : 0), 0) > 600_000) {
+    throw new AppError("VALIDATION", "La conversation est trop volumineuse.", "Effacez la conversation ou joignez moins de documents.");
+  }
   return input.map((m) => {
     const r = (m ?? {}) as Record<string, unknown>;
     if ((r.role !== "user" && r.role !== "assistant" && r.role !== "system") || typeof r.content !== "string") {

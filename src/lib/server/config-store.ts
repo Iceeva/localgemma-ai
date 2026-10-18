@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { AppConfig, FolderEntry, ModelEntry } from "@/types";
+import type { AppConfig, FolderEntry, MemoryNote, ModelEntry } from "@/types";
 import { resolveDataDir } from "./paths";
-import { DEFAULT_GENERATION, DEFAULT_SERVER_SETTINGS, validateGenerationParams, validateServerSettings } from "./validators";
+import { DEFAULT_GENERATION, DEFAULT_SEARCH_SETTINGS, DEFAULT_SERVER_SETTINGS, validateGenerationParams, validateSearchSettings, validateServerSettings } from "./validators";
 
 export function defaultConfig(): AppConfig {
   return {
@@ -15,6 +15,8 @@ export function defaultConfig(): AppConfig {
     ignoredPaths: [],
     server: { ...DEFAULT_SERVER_SETTINGS },
     generation: { ...DEFAULT_GENERATION },
+    search: { ...DEFAULT_SEARCH_SETTINGS },
+    memory: { enabled: true, notes: [] },
   };
 }
 
@@ -81,6 +83,24 @@ export function sanitizeConfig(raw: unknown): AppConfig {
       base.generation = validateGenerationParams(raw.generation as never, base.generation);
     } catch {
       /* valeurs par défaut conservées */
+    }
+  }
+  if (isObj(raw.search)) {
+    try {
+      base.search = validateSearchSettings(raw.search as never, base.search);
+    } catch {
+      /* valeurs par défaut conservées */
+    }
+  }
+  if (isObj(raw.memory)) {
+    base.memory.enabled = raw.memory.enabled !== false;
+    if (Array.isArray(raw.memory.notes)) {
+      for (const n of raw.memory.notes) {
+        if (!isObj(n) || !str(n.id) || !str(n.text)) continue;
+        const note: MemoryNote = { id: n.id as string, text: (n.text as string).slice(0, 300), createdAt: str(n.createdAt) ?? new Date().toISOString() };
+        base.memory.notes.push(note);
+      }
+      base.memory.notes = base.memory.notes.slice(0, 50);
     }
   }
   return base;
