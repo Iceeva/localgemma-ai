@@ -4,6 +4,8 @@ import { Save } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useApp } from "@/components/AppProvider";
 import { GenerationForm } from "@/components/GenerationForm";
+import { MemoryCard } from "@/components/MemoryCard";
+import { SearchSettingsCard } from "@/components/SearchSettingsCard";
 import { Button, Card, ErrorBox, PageHeader } from "@/components/ui";
 import { api, toPayload } from "@/lib/client/api";
 import type { ErrorPayload, GenerationParams } from "@/types";
@@ -42,6 +44,8 @@ export default function SettingsPage() {
           <Button variant="primary" onClick={() => void save()} loading={saving}><Save className="h-4 w-4" /> Enregistrer</Button>
         </div>
       </Card>
+      <SearchSettingsCard />
+      <MemoryCard />
       <Card title="Stockage local">
         <dl className="grid gap-y-2 text-sm sm:grid-cols-[11rem_1fr]">
           <dt className="text-slate-400">Dossier de données</dt><dd className="break-all">{meta?.dataDir ?? "…"}</dd>

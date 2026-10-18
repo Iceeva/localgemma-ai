@@ -50,7 +50,8 @@ const server = http.createServer((req, res) => {
     req.on("end", () => {
       const body = JSON.parse(raw);
       const last = [...body.messages].reverse().find((m) => m.role === "user");
-      const text = `Modèle ${base} : ${last ? last.content : ""}`;
+      const sys = body.messages.find((m) => m.role === "system");
+      const text = last && last.content.includes("ECHO_SYSTEM") ? `SYSTEM=${sys ? sys.content : ""}` : `Modèle ${base} : ${last ? last.content : ""}`;
       if (!body.stream) {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ choices: [{ message: { role: "assistant", content: text }, finish_reason: "stop" }] }));

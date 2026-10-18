@@ -3,6 +3,6 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   // Ces modules ne sont utilisés que côté serveur Node.js.
-  serverExternalPackages: [],
+  serverExternalPackages: ["pdfkit", "exceljs", "pptxgenjs", "mammoth", "unpdf", "docx"],
 };
 export default nextConfig;

@@ -1,9 +1,12 @@
 "use client";
 
-import { Check, Copy, Download, Eraser, RefreshCw, Send, SlidersHorizontal, Square } from "lucide-react";
+import { Check, Copy, Download, Eraser, FileText, Globe, Lock, Paperclip, RefreshCw, Send, SlidersHorizontal, Square, X } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ErrorPayload, GenerationParams } from "@/types";
+import type { ErrorPayload, GenerationParams, SearchResult } from "@/types";
+import { buildApiMessages, buildAttachmentContext, buildWebContext, contextBudgetChars, estimateTokens, parseMemoryCommand } from "@/lib/context";
+import { getMode, MODES } from "@/lib/modes";
 import { api, parseError, REQUEST_HEADERS, toPayload } from "@/lib/client/api";
 import {
   downloadText,
@@ -20,6 +23,7 @@ import {
 import { parseChunk, readSse } from "@/lib/client/sse";
 import { useApp } from "./AppProvider";
 import { GenerationForm } from "./GenerationForm";
+import { ExportMenu } from "./ExportMenu";
 import { Markdown } from "./Markdown";
 import { Badge, Button, ErrorBox } from "./ui";
 
@@ -34,6 +38,11 @@ export function ChatView({ id }: { id: string }) {
   const [showSettings, setShowSettings] = useState(false);
   const [params, setParams] = useState<GenerationParams | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [pending, setPending] = useState<Array<{ name: string; text: string }>>([]);
+  const [searching, setSearching] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const router = useRouter();
   const abortRef = useRef<{ ctrl: AbortController; generationId: string } | null>(null);
   const convRef = useRef<Conversation | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
@@ -72,13 +81,21 @@ export function ChatView({ id }: { id: string }) {
     await saveConversation(c).catch(() => notify("error", "Impossible d'enregistrer la conversation dans ce navigateur."));
   }, [notify]);
 
+  const mode = getMode(conv?.mode);
+  const webOn = conv?.webSearch === true;
+  const webAvailable = (config?.search.url ?? "") !== "";
+  const systemChars = (params?.systemPrompt.length ?? 0) + mode.prompt.length;
+  const budget = config && params ? contextBudgetChars(config.server.contextSize, params.maxTokens, systemChars) : 0;
+  const patchConv = (patch: Partial<Conversation>) => setConv((c) => (c ? { ...c, ...patch } : c));
+
   const generate = useCallback(
     async (base: Conversation, history: UiMessage[]) => {
       if (!params) return;
       setError(null);
       setGenerating(true);
       const modelName = status?.modelName ?? null;
-      const assistant: UiMessage = { id: uid(), role: "assistant", content: "", createdAt: new Date().toISOString(), modelName };
+      const lastUser = [...history].reverse().find((m) => m.role === "user");
+      const assistant: UiMessage = { id: uid(), role: "assistant", content: "", createdAt: new Date().toISOString(), modelName, sources: lastUser?.sources };
       let current: Conversation = { ...base, messages: [...history, assistant], modelId: status?.modelId ?? base.modelId, modelName: modelName ?? base.modelName, params, updatedAt: new Date().toISOString() };
       setConv(current);
       const ctrl = new AbortController();
@@ -93,7 +110,7 @@ export function ChatView({ id }: { id: string }) {
           method: "POST",
           headers: REQUEST_HEADERS,
           signal: ctrl.signal,
-          body: JSON.stringify({ messages: history.map((m) => ({ role: m.role, content: m.content })), params, generationId }),
+          body: JSON.stringify({ messages: buildApiMessages(history.map((m) => ({ role: m.role, content: m.content, context: m.context })), budget), params, generationId, mode: base.mode ?? "general" }),
         });
         if (!res.ok) throw await parseError(res);
         if (!params.stream || !res.headers.get("content-type")?.includes("text/event-stream")) {
@@ -135,20 +152,83 @@ export function ChatView({ id }: { id: string }) {
         await persist({ ...current, updatedAt: new Date().toISOString() });
       }
     },
-    [params, status, persist],
+    [params, status, persist, budget],
   );
 
   async function send() {
     const text = input.trim();
     const base = convRef.current;
-    if (!text || generating || !base || !params) return;
+    if (!text || generating || searching || !base || !params) return;
+
+    const note = parseMemoryCommand(text);
+    if (note) {
+      api("/api/memory", { method: "POST", body: { text: note } })
+        .then(() => notify("ok", "Ajouté à la mémoire locale."))
+        .catch((e) => notify("error", toPayload(e).message));
+    }
+
+    const hasDocs = pending.length > 0;
+    let webText = "";
+    let sources: SearchResult[] | undefined;
+    if (webOn) {
+      setSearching(true);
+      setError(null);
+      try {
+        const r = await api<{ query: string; results: SearchResult[] }>("/api/search", { method: "POST", body: { query: text } });
+        const web = buildWebContext(r.results, { budgetChars: hasDocs ? Math.floor(budget / 2) : budget, now: new Date(), query: r.query });
+        if (web.used.length) {
+          webText = web.text;
+          sources = web.used;
+        } else notify("info", "Aucun résultat web : réponse avec les connaissances du modèle.");
+      } catch (e) {
+        setError(toPayload(e)); // la question reste dans la zone de saisie
+        setSearching(false);
+        return;
+      }
+      setSearching(false);
+    }
+    const docs = buildAttachmentContext(pending, webText ? Math.floor(budget / 2) : budget);
+    const context = [webText, docs.text].filter(Boolean).join("\n\n") || undefined;
+
     setInput("");
-    const user: UiMessage = { id: uid(), role: "user", content: text, createdAt: new Date().toISOString() };
+    setPending([]);
+    const user: UiMessage = { id: uid(), role: "user", content: text, createdAt: new Date().toISOString(), context, attachments: docs.meta.length ? docs.meta : undefined, sources };
     const history = [...base.messages.filter((m) => !m.error || m.content), user];
     const first = base.messages.length === 0;
     const next = { ...base, title: first ? titleFrom(text) : base.title };
     await persist({ ...next, messages: history });
     await generate(next, history);
+  }
+
+  async function attach(files: FileList | null) {
+    if (!files?.length) return;
+    setUploading(true);
+    setError(null);
+    for (const file of Array.from(files).slice(0, 5 - pending.length)) {
+      try {
+        const res = await fetch("/api/extract", {
+          method: "POST",
+          headers: { "x-localgemma-request": "1", "x-filename": encodeURIComponent(file.name), "Content-Type": "application/octet-stream" },
+          body: file,
+        });
+        if (!res.ok) throw await parseError(res);
+        const r = (await res.json()) as { name: string; text: string };
+        setPending((p) => [...p.filter((x) => x.name !== r.name), { name: r.name, text: r.text }]);
+      } catch (e) {
+        setError(toPayload(e));
+      }
+    }
+    setUploading(false);
+    if (fileInput.current) fileInput.current.value = "";
+  }
+
+  function toggleWeb() {
+    if (!webAvailable) {
+      notify("info", "Configurez d'abord SearXNG dans Paramètres → Recherche Web.");
+      router.push("/settings");
+      return;
+    }
+    patchConv({ webSearch: !webOn });
   }
 
   async function regenerate() {
@@ -194,6 +274,10 @@ export function ChatView({ id }: { id: string }) {
           </p>
         </div>
         <div className="flex items-center gap-1.5">
+          <select value={mode.id} onChange={(e) => patchConv({ mode: e.target.value })} title={mode.description} aria-label="Mode de l'assistant" className="rounded-lg border border-surface-border bg-surface px-2 py-1.5 text-xs outline-none focus:border-accent">
+            {MODES.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+          </select>
+          <Badge tone={webOn ? "warn" : "ok"}>{webOn ? <><Globe className="h-3 w-3" /> Recherche web activée</> : <><Lock className="h-3 w-3" /> 100 % hors ligne</>}</Badge>
           <Badge tone={ready ? "ok" : status?.state === "starting" ? "warn" : "muted"}>{ready ? status?.modelName ?? "Prêt" : status?.state === "starting" ? "Chargement…" : "Aucun modèle actif"}</Badge>
           <Button variant="ghost" onClick={() => setShowSettings(!showSettings)} aria-label="Paramètres de génération"><SlidersHorizontal className="h-4 w-4" /></Button>
           <Button variant="ghost" disabled={!messages.length} onClick={() => conv && downloadText(`${safeFileName(conv.title)}.md`, toMarkdown(conv), "text/markdown")} title="Exporter en Markdown"><Download className="h-4 w-4" /> .md</Button>
@@ -236,12 +320,26 @@ export function ChatView({ id }: { id: string }) {
             <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : ""}`}>
               <div className={`max-w-[92%] rounded-2xl px-4 py-3 ${m.role === "user" ? "bg-accent/25 text-slate-50" : "border border-surface-border bg-surface-raised"}`}>
                 {m.role === "assistant" && <p className="mb-1 text-xs font-medium text-slate-400">{m.modelName ?? "Assistant"}</p>}
-                {m.role === "user" ? <p className="whitespace-pre-wrap break-words text-[0.95rem]">{m.content}</p> : m.content ? <Markdown text={m.content} /> : <span className="inline-flex items-center gap-2 text-sm text-slate-400"><span className="h-2 w-2 animate-pulse rounded-full bg-accent" /> Le modèle réfléchit…</span>}
+                {m.role === "user" ? (
+                  <>
+                    {m.attachments?.map((a) => <span key={a.name} className="mb-2 mr-1 inline-flex items-center gap-1 rounded-md bg-black/20 px-2 py-0.5 text-xs"><FileText className="h-3 w-3" /> {a.name}{a.truncated ? " (tronqué)" : ""}</span>)}
+                    <p className="whitespace-pre-wrap break-words text-[0.95rem]">{m.content}</p>
+                  </>
+                ) : m.content ? <Markdown text={m.content} /> : <span className="inline-flex items-center gap-2 text-sm text-slate-400"><span className="h-2 w-2 animate-pulse rounded-full bg-accent" /> Le modèle réfléchit…</span>}
+                {m.role === "assistant" && m.sources && m.sources.length > 0 && (
+                  <details className="mt-2 text-xs text-slate-400">
+                    <summary className="cursor-pointer">🌐 {m.sources.length} source(s) web</summary>
+                    <ol className="mt-1 list-decimal space-y-1 pl-5">
+                      {m.sources.map((r) => <li key={r.url}><a href={r.url} target="_blank" rel="noopener noreferrer" className="text-accent-soft underline">{r.title}</a></li>)}
+                    </ol>
+                  </details>
+                )}
                 {m.stopped && <p className="mt-2 text-xs text-amber-300">Génération arrêtée.</p>}
                 {m.error && <p className="mt-2 text-xs text-red-300">{m.error}</p>}
                 {m.role === "assistant" && m.content && (
                   <div className="mt-2 flex items-center gap-1 text-xs text-slate-400">
                     <button onClick={() => copy(m)} className="flex items-center gap-1 rounded px-1.5 py-1 hover:bg-white/10">{copied === m.id ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />} Copier</button>
+                    <ExportMenu markdown={m.content} title={conv?.title ?? "Réponse"} />
                     {i === lastAssistantIdx && !generating && <button onClick={() => void regenerate()} className="flex items-center gap-1 rounded px-1.5 py-1 hover:bg-white/10"><RefreshCw className="h-3 w-3" /> Régénérer</button>}
                     {m.tokensPerSecond ? <span className="ml-auto">{m.tokensPerSecond.toFixed(1)} tokens/s</span> : null}
                   </div>
@@ -256,7 +354,28 @@ export function ChatView({ id }: { id: string }) {
       </div>
 
       <div className="border-t border-surface-border p-3">
+        {(pending.length > 0 || webOn) && (
+          <div className="mx-auto mb-2 max-w-3xl space-y-1 text-xs text-slate-400">
+            <div className="flex flex-wrap gap-1.5">
+              {pending.map((f) => (
+                <span key={f.name} className="inline-flex items-center gap-1 rounded-md border border-surface-border bg-surface-raised px-2 py-1 text-slate-200">
+                  <FileText className="h-3 w-3" /> {f.name} <span className="text-slate-500">(~{estimateTokens(f.text.length)} tokens)</span>
+                  <button onClick={() => setPending((p) => p.filter((x) => x.name !== f.name))} aria-label={`Retirer ${f.name}`}><X className="h-3 w-3" /></button>
+                </span>
+              ))}
+            </div>
+            <p>
+              Place disponible pour documents et résultats web : ~{estimateTokens(budget)} tokens (contexte {config?.server.contextSize}).
+              {pending.some((f) => f.text.length > budget) && <span className="text-amber-300"> Les documents trop longs seront tronqués : augmentez le contexte dans « Gestionnaire de serveurs » (4096 ou plus) pour en lire davantage.</span>}
+            </p>
+          </div>
+        )}
         <div className="mx-auto flex max-w-3xl items-end gap-2">
+          <input ref={fileInput} type="file" multiple hidden accept=".txt,.md,.csv,.json,.xml,.html,.css,.js,.ts,.tsx,.jsx,.py,.java,.c,.cpp,.cs,.go,.rs,.php,.sql,.yml,.yaml,.log,.pdf,.docx,.xlsx" onChange={(e) => void attach(e.target.files)} />
+          <Button variant="secondary" className="h-12" onClick={() => fileInput.current?.click()} loading={uploading} disabled={pending.length >= 5} title="Joindre un fichier (PDF, Word, Excel, texte, code)" aria-label="Joindre un fichier"><Paperclip className="h-4 w-4" /></Button>
+          <Button variant={webOn ? "primary" : "secondary"} className="h-12" onClick={toggleWeb} aria-pressed={webOn} title={webAvailable ? (webOn ? "Recherche web activée : cliquez pour revenir hors ligne" : "Activer la recherche web pour les prochains messages") : "Recherche web non configurée"}>
+            <Globe className="h-4 w-4" /> Recherche Web
+          </Button>
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -273,7 +392,7 @@ export function ChatView({ id }: { id: string }) {
           {generating ? (
             <Button variant="danger" onClick={() => void stop()} className="h-12"><Square className="h-4 w-4" /> Arrêter</Button>
           ) : (
-            <Button variant="primary" onClick={() => void send()} disabled={!input.trim() || !params} className="h-12"><Send className="h-4 w-4" /> Envoyer</Button>
+            <Button variant="primary" onClick={() => void send()} loading={searching} disabled={!input.trim() || !params} className="h-12"><Send className="h-4 w-4" /> {searching ? "Recherche…" : "Envoyer"}</Button>
           )}
         </div>
       </div>

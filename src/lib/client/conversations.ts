@@ -1,5 +1,6 @@
 /** Historique des conversations, stocké localement dans IndexedDB (aucun serveur, aucun compte). */
-import type { GenerationParams } from "@/types";
+import type { GenerationParams, SearchResult } from "@/types";
+import type { AttachmentMeta } from "@/lib/context";
 
 export interface UiMessage {
   id: string;
@@ -10,6 +11,10 @@ export interface UiMessage {
   stopped?: boolean;
   error?: string;
   tokensPerSecond?: number | null;
+  /** Contexte ajouté à la question (documents, résultats web) : envoyé au modèle mais non affiché. */
+  context?: string;
+  attachments?: AttachmentMeta[];
+  sources?: SearchResult[];
 }
 
 export interface Conversation {
@@ -21,6 +26,9 @@ export interface Conversation {
   modelName: string | null;
   messages: UiMessage[];
   params?: Partial<GenerationParams>;
+  mode?: string;
+  /** Bouton « Recherche Web » : désactivé par défaut, jamais lancé automatiquement. */
+  webSearch?: boolean;
 }
 
 const DB_NAME = "localgemma-ai";

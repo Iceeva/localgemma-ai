@@ -107,6 +107,37 @@ Paramètres réellement transmis à `llama-server` : `--model`, `--host`, `--por
 
 ---
 
+## 5 bis. Fonctionnalités avancées
+
+> Ces fonctions ajoutent des outils autour du modèle ; la **qualité des réponses dépend du modèle GGUF** choisi (un modèle de 1 milliard de paramètres n'égalera pas un grand modèle).
+
+### Hors ligne par défaut, recherche web en option
+Sans configuration, l'application n'appelle **aucun service externe** : votre modèle GGUF répond avec ses connaissances et les documents que vous lui joignez. L'en-tête du chat affiche « 100 % hors ligne ».
+
+Pour la recherche web (facultatif) :
+1. Installez **SearXNG** (par exemple avec Docker : `docker run -d --name searxng -p 127.0.0.1:8888:8080 searxng/searxng`) et activez le format JSON dans son `settings.yml` (`search: formats: [html, json]`).
+2. *Paramètres → Recherche Web* : saisissez `http://127.0.0.1:8888`, **Tester la connexion**, **Enregistrer**.
+3. Dans une conversation, cliquez sur le bouton **Recherche Web** pour l'activer ou le désactiver. **Rien n'est jamais recherché automatiquement** : la recherche part seulement quand le bouton est activé, à l'envoi du message. Les résultats (titre, extrait, lien) sont transmis au modèle et les sources s'affichent sous sa réponse.
+4. SearXNG interroge des moteurs externes : une connexion Internet est nécessaire et vos termes de recherche quittent l'ordinateur (pas vos conversations).
+Documentation : <https://docs.searxng.org/dev/search_api.html>
+
+### Modes d'assistant
+Sélecteur dans l'en-tête du chat : Général, Programmation, Rédaction et langues, Apprentissage, Analyse et raisonnement, Vie pratique, Pages web, Documents. Chaque mode ajoute quelques lignes au prompt système (le mode est mémorisé par conversation).
+
+### Pièces jointes
+Bouton trombone : PDF (avec texte), Word `.docx`, Excel `.xlsx`, texte et code (`.txt .md .csv .json .py .js …`), 8 Mo et 5 fichiers maximum. Le texte est extrait localement, puis tronqué selon la place disponible dans le contexte (affichée sous la zone de saisie). **Avec 2048 tokens de contexte, très peu de texte tient** : passez à 4096 ou plus dans *Gestionnaire de serveurs* pour lire de vrais documents. Les PDF scannés (images) ne sont pas lus : l'OCR n'est pas inclus.
+
+### Export des réponses
+Bouton **Exporter** sous chaque réponse : Word, PDF, Excel (tableaux et blocs CSV de la réponse), PowerPoint (une diapositive par titre), Markdown, texte, et **ZIP de fichiers de code** (nom de fichier pris dans `title=chemin` ou dans un commentaire `# fichier: chemin` en première ligne). Dans le PDF, les caractères hors jeu Latin-1 (emojis, par exemple) sont remplacés par « ? ».
+
+### Aperçu de pages web
+Les blocs de code `html` et `svg` ont un bouton **Aperçu** : la page s'affiche dans un cadre isolé (sans accès au réseau ni à l'application), et peut être téléchargée.
+
+### Mémoire locale
+*Paramètres → Mémoire locale* : notes (300 caractères, 50 maximum) ajoutées au prompt de toutes les conversations. Vous pouvez aussi écrire « Retiens que … » dans le chat. Stockage dans `config.json`, jamais envoyé ailleurs. N'y mettez ni mot de passe ni donnée sensible.
+
+---
+
 ## 6. Ports utilisés
 
 | Port | Usage | Modifiable |
@@ -168,7 +199,10 @@ Dossier modifiable avec la variable `LOCALGEMMA_DATA_DIR` (voir `.env.example`).
 | `GET/POST /api/models`, `POST /api/models/refresh` | Lister / ajouter / actualiser |
 | `DELETE /api/models/:id`, `POST …/relocate`, `…/select`, `…/start` | Retirer, relocaliser, sélectionner, utiliser |
 | `GET /api/server/status`, `POST …/start`, `…/stop`, `…/restart`, `…/test`, `GET …/logs` | Serveur llama.cpp |
-| `POST /api/chat`, `POST /api/chat/stop` | Chat (SSE relayé) et arrêt d'une génération |
+| `POST /api/chat`, `POST /api/chat/stop` | Chat (SSE relayé, mode + mémoire) et arrêt d'une génération |
+| `POST /api/search`, `POST /api/search/test` | Recherche SearXNG (uniquement si configurée) |
+| `POST /api/extract`, `POST /api/export` | Lecture des pièces jointes ; export Word/PDF/Excel/PowerPoint |
+| `GET/POST/PUT /api/memory`, `PATCH/DELETE /api/memory/:id` | Mémoire locale |
 
 Le chat n'est **jamais simulé** : sans serveur prêt, une erreur explicite est renvoyée.
 
@@ -231,4 +265,5 @@ scripts/            install / start / stop / check-env (PowerShell)
 - Les fenêtres de sélection Windows et les scripts PowerShell ont été écrits pour Windows mais **n'ont pas pu être exécutés** dans l'environnement de développement (Linux). Le chemin PowerShell est couvert par des tests avec un exécuteur simulé uniquement ; testez-le à la première utilisation.
 - L'intégration avec un **vrai** `llama-server` n'a pas été testée avec un vrai modèle : elle l'a été avec un faux serveur imitant `/health` et `/v1/chat/completions` (SSE). Les options `top_k`, `--parallel` et le format des erreurs peuvent varier selon la version de llama.cpp.
 - Les métadonnées GGUF sont lues dans les 4 premiers Mo du fichier ; si elles sont absentes, la quantification est déduite du nom de fichier (signalé « d'après le nom »).
+- Les fichiers `.doc`, `.xls`, `.ppt(x)` ne sont pas lus (enregistrez en `.docx`/`.xlsx`/`.pdf`). Pas d'OCR, pas de génération d'images ni d'exécution de code.
 - Les fichiers `mmproj*.gguf` et les parties 2..N de modèles découpés ne sont pas listés.
